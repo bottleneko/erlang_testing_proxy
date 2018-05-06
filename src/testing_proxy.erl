@@ -14,6 +14,9 @@
   response
 }).
 
+%%====================================================================
+%% API
+%%====================================================================
 
 init(Req0, _State) ->
   Uri = binary_to_list(cowboy_req:host(Req0)),
@@ -37,15 +40,14 @@ is_authorized(Req0, State) ->
       Req1 = cowboy_req:delete_resp_header(<<"authorization">>, Req0),
       {true, Req1, State};
     _ ->
-      {{false, <<"Digest realm=\"localhost\", nonce=\"fucku\", qop=\"auth\"">>}, Req0, State}
+      {{false, <<"Digest realm=\"localhost\", nonce=\"test\", qop=\"auth\"">>}, Req0, State}
   end.
 
 resource_exists(Req0, State) ->
   #state{response = #{status := Status}} = State,
-  io:format("RE STATUS ~p~n", [Status]),
   case Status of
     412 ->
-      {true, Req0, State};
+      {false, Req0, State};
     404 ->
       {false, Req0, State};
     301 ->
@@ -53,7 +55,7 @@ resource_exists(Req0, State) ->
     307 ->
       {false, Req0, State};
     _ ->
-      {false, Req0, State}
+      {true, Req0, State}
   end.
 
 previously_existed(Req0, State) ->
@@ -100,6 +102,10 @@ to_html(Req0, State) ->
     Data ->
       {Data, Req1, State}
   end.
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
 
 receive_gun_response(ConnPid, StreamRef) ->
   receive
