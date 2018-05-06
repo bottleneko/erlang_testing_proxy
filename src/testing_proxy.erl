@@ -18,16 +18,17 @@ reply(Req, _State) ->
   StreamRef = gun:request(ConnPid, Method, PathWithQs, Headers),
   #{status := Status, headers := ResponseHeaders0, content := Received} = receive_response(ConnPid, StreamRef),
   ResponseHeaders1 = proplists:delete(<<"proxy-connection">>, ResponseHeaders0),
-  ResponseHeaders2 = proplists:delete(<<"transfer-encoding">>, ResponseHeaders1),
   case Received of
     no_data ->
       cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Req);
     <<"">> ->
-%%      if
-%%        Status == 301 -> io:format("STATUS ~p~n~p~n~p~n", [Status, ResponseHeaders1, Req]);
-%%        true -> ok
-%%      end,
-      cowboy_req:reply(Status, maps:from_list(ResponseHeaders2), Req);
+      %% TODO: correct processing chunked data
+      case proplists:get_value(<<"transfer-encoding">>, ResponseHeaders1) of
+        <<"chunked">> ->
+          cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), <<"0\r\n\r\n">> , Req);
+        _ ->
+          cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Req)
+      end;
     _ ->
       cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Received, Req)
   end.
