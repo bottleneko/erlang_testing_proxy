@@ -16,7 +16,8 @@ start(_StartType, _StartArgs) ->
     ]}
   ]),
   {ok, _} = cowboy:start_clear(http, [{port, 8080}], #{
-    env => #{dispatch => Dispatch}
+    env => #{dispatch => Dispatch},
+    middlewares => [cowboy_router, auth_middleware, cowboy_handler]
   }),
   erlang_testing_proxy_sup:start_link().
 
