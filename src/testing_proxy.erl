@@ -3,6 +3,7 @@
 -export([init/2]).
 
 init(Req0, State) ->
+%%  io:format("REQ ~p~n", Req0),
   Req1 = reply(Req0, State),
   {ok, Req1, State}.
 
@@ -17,29 +18,25 @@ reply(Req, _State) ->
   {ok, ConnPid} = gun:open(Uri, 80, #{connect_timeout => infinity, retry => 0}),
   StreamRef = gun:request(ConnPid, Method, PathWithQs, Headers),
   #{status := Status, headers := ResponseHeaders0, content := Received} = receive_response(ConnPid, StreamRef),
-  ResponseHeaders1 = proplists:delete(<<"proxy-connection">>, ResponseHeaders0),
-  case Received of
-    no_data ->
-      cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Req);
-    <<"">> ->
-      %% TODO: correct processing chunked data
-      case proplists:get_value(<<"transfer-encoding">>, ResponseHeaders1) of
-        <<"chunked">> ->
-          cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), <<"0\r\n\r\n">> , Req);
-        _ ->
-          cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Req)
-      end;
-    _ ->
-      cowboy_req:reply(Status, maps:from_list(ResponseHeaders1), Received, Req)
-  end.
+  HidedProxyResponseHeaders = proplists:delete(<<"proxy-connection">>, ResponseHeaders0),
+  chunked_processing(Status, HidedProxyResponseHeaders, Received, Req).
 
+chunked_processing(Status, Headers, ResponseBody, Req) ->
+  case proplists:get_value(<<"transfer-encoding">>, Headers) of
+    <<"chunked">> ->
+      Req1 = cowboy_req:stream_reply(Status, maps:from_list(Headers), Req),
+      cowboy_req:stream_body(ResponseBody, fin, Req1),
+      Req1;
+    _ ->
+      cowboy_req:reply(Status, maps:from_list(Headers), ResponseBody, Req)
+  end.
 
 receive_response(ConnPid, StreamRef) ->
   receive
     {gun_response, ConnPid, StreamRef, fin, Status, Headers} ->
-      #{status => Status, headers => Headers, content => no_data};
+      #{status => Status, headers => Headers, content => <<>>};
     {gun_response, ConnPid, StreamRef, nofin, Status, Headers} ->
-      receive_data_loop(ConnPid, StreamRef, #{status => Status, headers => Headers, content => <<"">>});
+      receive_data_loop(ConnPid, StreamRef, #{status => Status, headers => Headers, content => <<>>});
     {'DOWN', _, process, ConnPid, Reason} ->
       error_logger:error_msg("Oops!"),
       exit(Reason)
