@@ -1,5 +1,5 @@
 {application, erlang_testing_proxy,
- [{description, "Erlang testin proxy"},
+ [{description, "Erlang testing proxy"},
   {vsn, "0.1.0"},
   {registered, []},
   {mod, { erlang_testing_proxy_app, []}},
