@@ -22,11 +22,9 @@ execute(Req0 = #{headers := Headers}, Env) ->
       ServerResponse = auth_response(RequestProperties, Password, Method),
       case ServerResponse of
         Response ->
-          io:format("SUCCESS~n"),
           Req1 = cowboy_req:delete_resp_header(<<"proxy-authorization">>, Req0),
           {ok, Req1, Env};
         _ ->
-          io:format("FAIL~n"),
           unauthorized_reply(Req0)
       end
   end.
@@ -66,8 +64,7 @@ ha2(Method, URI) ->
 -spec parse_unauthorized(Message :: binary()) -> Parsed :: map().
 parse_unauthorized(<<"Digest ", Message/binary>>) ->
   Splitted = re:split(Message, <<", ">>),
-  RawProperties = lists:map(fun(Elem) -> list_to_tuple(re:split(Elem, <<"=">>)) end, Splitted),
-  %% @TODO: uri may be have eq symbol
+  RawProperties = lists:map(fun(Elem) -> list_to_tuple(re:split(Elem, <<"=">>, [{parts, 2}])) end, Splitted),
   RawMapProperties = maps:from_list(RawProperties),
   maps:map(
     fun(_Key, Value) ->
