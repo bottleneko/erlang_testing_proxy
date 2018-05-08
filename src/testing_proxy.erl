@@ -3,11 +3,11 @@
 -export([init/2]).
 
 init(Req0, State) ->
-%%  io:format("REQ ~p~n", Req0),
   Req1 = reply(Req0, State),
   {ok, Req1, State}.
 
 
+%% @TODO: add support for using in cascade proxy
 reply(Req, _State) ->
   Uri = binary_to_list(cowboy_req:host(Req)),
   Path = cowboy_req:path(Req),
@@ -17,8 +17,8 @@ reply(Req, _State) ->
   Method = cowboy_req:method(Req),
   {ok, ConnPid} = gun:open(Uri, 80, #{connect_timeout => infinity, retry => 0}),
   StreamRef = gun:request(ConnPid, Method, PathWithQs, Headers),
-  #{status := Status, headers := ResponseHeaders0, content := Received} = receive_response(ConnPid, StreamRef),
-  HidedProxyResponseHeaders = proplists:delete(<<"proxy-connection">>, ResponseHeaders0),
+  #{status := Status, headers := ResponseHeaders, content := Received} = receive_response(ConnPid, StreamRef),
+  HidedProxyResponseHeaders = proplists:delete(<<"proxy-connection">>, ResponseHeaders),
   chunked_processing(Status, HidedProxyResponseHeaders, Received, Req).
 
 chunked_processing(Status, Headers, ResponseBody, Req) ->
@@ -40,8 +40,8 @@ receive_response(ConnPid, StreamRef) ->
     {'DOWN', _, process, ConnPid, Reason} ->
       error_logger:error_msg("Oops!"),
       exit(Reason)
-  after 1000 ->
-    exit(timeout)
+  after 2000 ->
+    #{status => 502, headers => [],content => <<>>}
   end.
 
 receive_data_loop(Pid, Ref, Response = #{content := Acc}) ->
@@ -52,7 +52,8 @@ receive_data_loop(Pid, Ref, Response = #{content := Acc}) ->
       receive_data_loop(Pid, Ref, Response#{content => <<Acc/binary, Data/binary>>});
     {gun_data, Pid, Ref, fin, Data} ->
       Response#{content => <<Acc/binary, Data/binary>>};
-    A -> error(A)
-  after 5000 ->
-    error(timeout)
+    A ->
+      error(A)
+  after 2000 ->
+    #{status => 502, headers => [],content => <<>>}
   end.
